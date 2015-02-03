@@ -1,0 +1,853 @@
+
+I'm just starting to scratch golang surface, and until now it has been a pleasant experience.
+
+golang feels *solid* and *fast*.
+
+Let me share with you, on this notes, a few golang internals as long as I'm  stumbling upon them: 
+
+Today I've tripped over some golang source code that looks like a copy-paste frenzy, but is a very clever assembler trick to make the processor go as fast as possible:
+
+The code is in runtime/asm_amd64.s and looks like this:
+
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		...
+
+... repeated ~~128~~ 2^7 times
+
+and later:
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		...
+		
+... repeated, again, 2^7 times, (512 LOC)
+
+It turns out this is a clever trick called "A Duff's device". Wow! today we're learning very low-level stuff.
+
+If this is the trickery level of golang, *no wonder why is so fast!*
+
+I'll paste the code, and you can google Duff's device yourself,  but before that, a warning snippet I've found on source comments ***Keep your hands off vprintf! :)*** (runtime\print1.go) 
+>    // Very simple printf.  Only for debugging prints.
+>   // ***Do not add to this without checking with Rob.***
+>  *func vprintf(str string, arg unsafe.Pointer)...*
+
+And now, *for something completely different*: here's the full code section with the Duff's devices from runtime/asm_amd64.s, for your viewing pleasure:
+
+	// A Duff's device for zeroing memory. 
+	// The compiler jumps to computed addresses within
+	// this routine to zero chunks of memory.  Do not
+	// change this code without also changing the code
+	// in ../../cmd/6g/ggen.c:clearfat.
+	// AX: zero
+	// DI: ptr to memory to be zeroed
+	// DI is updated as a side effect.
+	TEXT runtime·duffzero(SB), NOSPLIT, $0-0
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		STOSQ
+		RET
+
+	// A Duff's device for copying memory.
+	// The compiler jumps to computed addresses within
+	// this routine to copy chunks of memory.  Source
+	// and destination must not overlap.  Do not
+	// change this code without also changing the code
+	// in ../../cmd/6g/cgen.c:sgen.
+	// SI: ptr to source memory
+	// DI: ptr to destination memory
+	// SI and DI are updated as a side effect.
+
+	// NOTE: this is equivalent to a sequence of MOVSQ but
+	// for some reason that is 3.5x slower than this code.
+	// The STOSQ above seem fine, though.
+	TEXT runtime·duffcopy(SB), NOSPLIT, $0-0
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		MOVQ	(SI),CX
+		ADDQ	$8,SI
+		MOVQ	CX,(DI)
+		ADDQ	$8,DI
+
+		RET
+
+
+> Written with [StackEdit](https://stackedit.io/).
